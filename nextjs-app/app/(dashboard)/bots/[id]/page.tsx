@@ -6,8 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Upload, MessageSquare, Settings, ArrowLeft, Loader2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
@@ -39,6 +37,7 @@ export default function BotDetailPage() {
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [activeTab, setActiveTab] = useState("settings")
 
   // Form states
   const [name, setName] = useState("")
@@ -202,178 +201,190 @@ export default function BotDetailPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="settings" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="settings">
-            <Settings className="h-4 w-4 mr-2" />
-            Settings
-          </TabsTrigger>
-          <TabsTrigger value="knowledge">
-            <Upload className="h-4 w-4 mr-2" />
-            Knowledge Base
-          </TabsTrigger>
-          <TabsTrigger value="test">
-            <MessageSquare className="h-4 w-4 mr-2" />
-            Test Chat
-          </TabsTrigger>
-        </TabsList>
+      {/* Simple Tab Navigation */}
+      <div className="mb-6 flex gap-2">
+        <Button 
+          variant={activeTab === "settings" ? "default" : "outline"}
+          onClick={() => setActiveTab("settings")}
+        >
+          <Settings className="h-4 w-4 mr-2" />
+          Settings
+        </Button>
+        <Button 
+          variant={activeTab === "knowledge" ? "default" : "outline"}
+          onClick={() => setActiveTab("knowledge")}
+        >
+          <Upload className="h-4 w-4 mr-2" />
+          Knowledge Base
+        </Button>
+        <Button 
+          variant={activeTab === "test" ? "default" : "outline"}
+          onClick={() => setActiveTab("test")}
+        >
+          <MessageSquare className="h-4 w-4 mr-2" />
+          Test Chat
+        </Button>
+      </div>
 
-        <TabsContent value="settings" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Bot Settings</CardTitle>
-              <CardDescription>Configure how your bot behaves</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Bot Name</Label>
-                <Input
-                  id="name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="My Assistant"
-                />
-              </div>
+      {/* Settings Tab */}
+      {activeTab === "settings" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Bot Settings</CardTitle>
+            <CardDescription>Configure how your bot behaves</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Bot Name</Label>
+              <Input
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="My Assistant"
+              />
+            </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="greeting">Greeting Message</Label>
-                <Input
-                  id="greeting"
-                  value={greeting}
-                  onChange={(e) => setGreeting(e.target.value)}
-                  placeholder="Hi! How can I help you today?"
-                />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="greeting">Greeting Message</Label>
+              <Input
+                id="greeting"
+                value={greeting}
+                onChange={(e) => setGreeting(e.target.value)}
+                placeholder="Hi! How can I help you today?"
+              />
+            </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="system">System Prompt</Label>
-                <Textarea
-                  id="system"
-                  value={systemPrompt}
-                  onChange={(e) => setSystemPrompt(e.target.value)}
-                  placeholder="You are a helpful assistant..."
-                  rows={4}
-                />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="system">System Prompt</Label>
+              <textarea
+                id="system"
+                value={systemPrompt}
+                onChange={(e) => setSystemPrompt(e.target.value)}
+                placeholder="You are a helpful assistant..."
+                rows={4}
+                className="w-full px-3 py-2 border rounded-md"
+              />
+            </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="temp">Temperature: {temperature}</Label>
-                <input
-                  id="temp"
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.1"
-                  value={temperature}
-                  onChange={(e) => setTemperature(parseFloat(e.target.value))}
-                  className="w-full"
-                />
-                <p className="text-sm text-muted-foreground">
-                  Lower = more focused, Higher = more creative
-                </p>
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="temp">Temperature: {temperature}</Label>
+              <input
+                id="temp"
+                type="range"
+                min="0"
+                max="1"
+                step="0.1"
+                value={temperature}
+                onChange={(e) => setTemperature(parseFloat(e.target.value))}
+                className="w-full"
+              />
+              <p className="text-sm text-muted-foreground">
+                Lower = more focused, Higher = more creative
+              </p>
+            </div>
 
-              <Button onClick={saveSettings} disabled={saving}>
-                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Save Settings
-              </Button>
-            </CardContent>
-          </Card>
-        </TabsContent>
+            <Button onClick={saveSettings} disabled={saving}>
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Save Settings
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
-        <TabsContent value="knowledge" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Knowledge Base</CardTitle>
-              <CardDescription>Upload documents to teach your bot</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="border-2 border-dashed rounded-lg p-8 text-center">
-                <Upload className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <p className="text-sm text-muted-foreground mb-4">
-                  Upload PDF, TXT, or DOCX files
-                </p>
-                <Input
-                  type="file"
-                  accept=".pdf,.txt,.docx"
-                  onChange={handleFileUpload}
-                  disabled={uploading}
-                  className="max-w-xs mx-auto"
-                />
-              </div>
+      {/* Knowledge Base Tab */}
+      {activeTab === "knowledge" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Knowledge Base</CardTitle>
+            <CardDescription>Upload documents to teach your bot</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="border-2 border-dashed rounded-lg p-8 text-center">
+              <Upload className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <p className="text-sm text-muted-foreground mb-4">
+                Upload PDF, TXT, or DOCX files
+              </p>
+              <Input
+                type="file"
+                accept=".pdf,.txt,.docx"
+                onChange={handleFileUpload}
+                disabled={uploading}
+                className="max-w-xs mx-auto"
+              />
+            </div>
 
-              <div className="space-y-2">
-                <h3 className="font-semibold">Uploaded Sources ({sources.length})</h3>
-                {sources.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No sources uploaded yet</p>
-                ) : (
-                  sources.map((source) => (
-                    <div
-                      key={source.id}
-                      className="flex items-center justify-between p-3 border rounded-lg"
-                    >
-                      <div>
-                        <p className="font-medium">{source.name}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {source.chunk_count} chunks • {source.status}
-                        </p>
-                      </div>
+            <div className="space-y-2">
+              <h3 className="font-semibold">Uploaded Sources ({sources.length})</h3>
+              {sources.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No sources uploaded yet</p>
+              ) : (
+                sources.map((source) => (
+                  <div
+                    key={source.id}
+                    className="flex items-center justify-between p-3 border rounded-lg"
+                  >
+                    <div>
+                      <p className="font-medium">{source.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {source.chunk_count} chunks • {source.status}
+                      </p>
                     </div>
-                  ))
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="test">
-          <Card className="h-[600px] flex flex-col">
-            <CardHeader>
-              <CardTitle>Test Your Bot</CardTitle>
-              <CardDescription>Chat with your bot to test its responses</CardDescription>
-            </CardHeader>
-            <CardContent className="flex-1 flex flex-col">
-              <div className="flex-1 overflow-y-auto space-y-4 mb-4">
-                {messages.length === 0 ? (
-                  <div className="text-center text-muted-foreground py-8">
-                    Start a conversation to test your bot
                   </div>
-                ) : (
-                  messages.map((msg, i) => (
-                    <div
-                      key={i}
-                      className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                    >
-                      <div
-                        className={`max-w-[80%] rounded-lg p-3 ${
-                          msg.role === "user"
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-muted"
-                        }`}
-                      >
-                        {msg.content}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-              <div className="flex gap-2">
-                <Input
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyPress={(e) => e.key === "Enter" && sendMessage()}
-                  placeholder="Type your message..."
-                  disabled={chatting}
-                />
-                <Button onClick={sendMessage} disabled={chatting || !input.trim()}>
-                  {chatting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+      {/* Test Chat Tab */}
+      {activeTab === "test" && (
+        <Card className="h-[600px] flex flex-col">
+          <CardHeader>
+            <CardTitle>Test Your Bot</CardTitle>
+            <CardDescription>Chat with your bot to test its responses</CardDescription>
+          </CardHeader>
+          <CardContent className="flex-1 flex flex-col">
+            <div className="flex-1 overflow-y-auto space-y-4 mb-4">
+              {messages.length === 0 ? (
+                <div className="text-center text-muted-foreground py-8">
+                  Start a conversation to test your bot
+                </div>
+              ) : (
+                messages.map((msg, i) => (
+                  <div
+                    key={i}
+                    className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                  >
+                    <div
+                      className={`max-w-[80%] rounded-lg p-3 ${
+                        msg.role === "user"
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted"
+                      }`}
+                    >
+                      {msg.content}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              <Input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyPress={(e) => e.key === "Enter" && sendMessage()}
+                placeholder="Type your message..."
+                disabled={chatting}
+              />
+              <Button onClick={sendMessage} disabled={chatting || !input.trim()}>
+                {chatting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
