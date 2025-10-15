@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
 import { supabase } from '@/lib/db'
-import pdfParse from 'pdf-parse'
-import mammoth from 'mammoth'
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -57,6 +55,8 @@ export async function POST(
     let fileType = ''
 
     if (file.name.endsWith('.pdf')) {
+      // Dynamic import to avoid build-time issues
+      const pdfParse = (await import('pdf-parse')).default
       const pdfData = await pdfParse(buffer)
       text = pdfData.text
       fileType = 'pdf'
@@ -64,6 +64,7 @@ export async function POST(
       text = buffer.toString('utf-8')
       fileType = 'txt'
     } else if (file.name.endsWith('.docx')) {
+      const mammoth = await import('mammoth')
       const result = await mammoth.extractRawText({ buffer })
       text = result.value
       fileType = 'docx'
