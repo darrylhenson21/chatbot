@@ -52,7 +52,6 @@ export async function POST(
       return NextResponse.json({ error: 'No file provided' }, { status: 400 })
     }
 
-    // Read file content
     const buffer = Buffer.from(await file.arrayBuffer())
     let text = ''
     let fileType = ''
@@ -76,7 +75,6 @@ export async function POST(
       return NextResponse.json({ error: 'No text content found' }, { status: 400 })
     }
 
-    // Create source record
     const { data: source, error: sourceError } = await supabase
       .from('sources')
       .insert({
@@ -90,14 +88,11 @@ export async function POST(
 
     if (sourceError) throw sourceError
 
-    // Split text into chunks (simple chunking by paragraphs/sentences)
-    const chunks = splitIntoChunks(text, 500) // 500 tokens per chunk
+    const chunks = splitIntoChunks(text, 500)
 
-    // Process chunks and generate embeddings
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i]
 
-      // Generate embedding
       const embeddingResponse = await openai.embeddings.create({
         model: 'text-embedding-ada-002',
         input: chunk,
@@ -105,7 +100,6 @@ export async function POST(
 
       const embedding = embeddingResponse.data[0].embedding
 
-      // Store chunk with embedding
       await supabase.from('chunks').insert({
         source_id: source.id,
         bot_id: params.id,
@@ -115,7 +109,6 @@ export async function POST(
       })
     }
 
-    // Update source status
     await supabase
       .from('sources')
       .update({ status: 'completed' })
@@ -136,15 +129,12 @@ export async function POST(
   }
 }
 
-// Helper function to split text into chunks
 function splitIntoChunks(text: string, maxTokens: number): string[] {
-  // Simple chunking by sentences
   const sentences = text.match(/[^.!?]+[.!?]+/g) || [text]
   const chunks: string[] = []
   let currentChunk = ''
 
   for (const sentence of sentences) {
-    // Rough token estimation: 1 token ≈ 4 characters
     const estimatedTokens = (currentChunk + sentence).length / 4
 
     if (estimatedTokens > maxTokens && currentChunk.length > 0) {
@@ -161,13 +151,3 @@ function splitIntoChunks(text: string, maxTokens: number): string[] {
 
   return chunks.filter(chunk => chunk.length > 0)
 }
-```
-
-Your folder structure should now be:
-```
-nextjs-app/app/api/bots/[id]/
-  chat/              ← Created in Step 2
-    route.ts         
-  sources/           ← NEW FOLDER
-    route.ts         ← NEW FILE (create this)
-  route.ts           ← Already exists
