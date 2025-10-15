@@ -17,7 +17,6 @@ export async function POST(
       return NextResponse.json({ error: 'Message is required' }, { status: 400 })
     }
 
-    // Get bot configuration
     const { data: bot, error: botError } = await supabase
       .from('bots')
       .select('*')
@@ -28,7 +27,6 @@ export async function POST(
       return NextResponse.json({ error: 'Bot not found' }, { status: 404 })
     }
 
-    // Generate embedding for the user's message
     const embeddingResponse = await openai.embeddings.create({
       model: 'text-embedding-ada-002',
       input: message,
@@ -36,7 +34,6 @@ export async function POST(
 
     const embedding = embeddingResponse.data[0].embedding
 
-    // Search for relevant chunks using vector similarity
     const { data: chunks, error: searchError } = await supabase.rpc(
       'match_chunks',
       {
@@ -47,19 +44,16 @@ export async function POST(
       }
     )
 
-    // Build context from relevant chunks
     let context = ''
     if (chunks && chunks.length > 0) {
       context = chunks.map((chunk: any) => chunk.content).join('\n\n')
     }
 
-    // Build the system prompt
     const systemPrompt = bot.system_prompt || 'You are a helpful assistant.'
     const fullSystemPrompt = context
       ? `${systemPrompt}\n\nUse the following information to answer the user's question:\n\n${context}`
       : systemPrompt
 
-    // Generate response using OpenAI
     const completion = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
       messages: [
@@ -85,11 +79,3 @@ export async function POST(
     )
   }
 }
-```
-
-Your folder structure should now be:
-```
-nextjs-app/app/api/bots/[id]/
-  chat/              ← NEW FOLDER
-    route.ts         ← NEW FILE (create this)
-  route.ts           ← Already exists
