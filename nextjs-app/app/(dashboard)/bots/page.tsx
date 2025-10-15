@@ -1,236 +1,389 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Plus, Settings, Trash2, Copy } from "lucide-react"
+import { Upload, MessageSquare, Settings, ArrowLeft, Loader2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 interface Bot {
   id: string
   name: string
+  greeting?: string
+  system_prompt?: string
   status: string
-  domain_count?: number
-  source_count?: number
-  updated_at: string
+  temperature?: number
+  max_tokens?: number
 }
 
-export default function BotsPage() {
-  const [bots, setBots] = useState<Bot[]>([])
-  const [loading, setLoading] = useState(true)
-  const [creating, setCreating] = useState(false)
-  const [showCreateDialog, setShowCreateDialog] = useState(false)
-  const [newBotName, setNewBotName] = useState("")
+interface Source {
+  id: string
+  name: string
+  type: string
+  status: string
+  chunk_count: number
+  created_at: string
+}
+
+export default function BotDetailPage() {
+  const params = useParams()
   const router = useRouter()
   const { toast } = useToast()
+  const [bot, setBot] = useState<Bot | null>(null)
+  const [sources, setSources] = useState<Source[]>([])
+  const [loading, setLoading] = useState(true)
+  const [uploading, setUploading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [activeTab, setActiveTab] = useState("settings")
+
+  // Form states
+  const [name, setName] = useState("")
+  const [greeting, setGreeting] = useState("")
+  const [systemPrompt, setSystemPrompt] = useState("")
+  const [temperature, setTemperature] = useState(0.7)
+
+  // Chat states
+  const [messages, setMessages] = useState<Array<{ role: string; content: string }>>([])
+  const [input, setInput] = useState("")
+  const [chatting, setChatting] = useState(false)
 
   useEffect(() => {
-    loadBots()
+    loadBot()
+    loadSources()
   }, [])
 
-  const loadBots = async () => {
+  const loadBot = async () => {
     try {
-      const response = await fetch("/api/bots")
+      const response = await fetch(`/api/bots/${params.id}`)
       if (response.ok) {
         const data = await response.json()
-        setBots(data)
+        setBot(data)
+        setName(data.name || "")
+        setGreeting(data.greeting || "Hi! How can I help you today?")
+        setSystemPrompt(data.system_prompt || "You are a helpful assistant.")
+        setTemperature(data.temperature || 0.7)
       }
     } catch (error) {
-      console.error("Failed to load bots:", error)
+      console.error("Failed to load bot:", error)
     } finally {
       setLoading(false)
     }
   }
 
-  const createBot = async () => {
-    if (!newBotName.trim()) return
-
-    setCreating(true)
+  const loadSources = async () => {
     try {
-      const response = await fetch("/api/bots", {
-        method: "POST",
+      const response = await fetch(`/api/bots/${params.id}/sources`)
+      if (response.ok) {
+        const data = await response.json()
+        setSources(data)
+      }
+    } catch (error) {
+      console.error("Failed to load sources:", error)
+    }
+  }
+
+  const saveSettings = async () => {
+    setSaving(true)
+    try {
+      const response = await fetch(`/api/bots/${params.id}`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newBotName }),
+        body: JSON.stringify({
+          name,
+          greeting,
+          system_prompt: systemPrompt,
+          temperature,
+        }),
       })
 
       if (response.ok) {
-        const bot = await response.json()
-        toast({ title: "Bot created successfully" })
-        router.push(`/bots/${bot.id}`)
+        toast({ title: "Settings saved successfully" })
+        loadBot()
       } else {
-        const data = await response.json()
-        toast({
-          title: "Error",
-          description: data.error || "Failed to create bot",
-          variant: "destructive",
-        })
+        toast({ title: "Error", description: "Failed to save settings", variant: "destructive" })
       }
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to create bot",
-        variant: "destructive",
-      })
+      toast({ title: "Error", description: "Failed to save settings", variant: "destructive" })
     } finally {
-      setCreating(false)
+      setSaving(false)
     }
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "ready":
-        return "bg-green-100 text-green-800"
-      case "needs_source":
-        return "bg-yellow-100 text-yellow-800"
-      case "processing":
-        return "bg-blue-100 text-blue-800"
-      case "error":
-        return "bg-red-100 text-red-800"
-      case "disabled":
-        return "bg-gray-100 text-gray-800"
-      default:
-        return "bg-gray-100 text-gray-800"
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setUploading(true)
+    const formData = new FormData()
+    formData.append("file", file)
+
+    try {
+      const response = await fetch(`/api/bots/${params.id}/sources`, {
+        method: "POST",
+        body: formData,
+      })
+
+      if (response.ok) {
+        toast({ title: "File uploaded successfully" })
+        loadSources()
+      } else {
+        const data = await response.json()
+        toast({ title: "Error", description: data.error || "Upload failed", variant: "destructive" })
+      }
+    } catch (error) {
+      toast({ title: "Error", description: "Upload failed", variant: "destructive" })
+    } finally {
+      setUploading(false)
     }
   }
 
-  const formatStatus = (status: string) => {
-    return status.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())
+  const sendMessage = async () => {
+    if (!input.trim() || chatting) return
+
+    const userMessage = input.trim()
+    setInput("")
+    setMessages(prev => [...prev, { role: "user", content: userMessage }])
+    setChatting(true)
+
+    try {
+      const response = await fetch(`/api/bots/${params.id}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: userMessage }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setMessages(prev => [...prev, { role: "assistant", content: data.response }])
+      } else {
+        toast({ title: "Error", description: "Failed to get response", variant: "destructive" })
+      }
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to get response", variant: "destructive" })
+    } finally {
+      setChatting(false)
+    }
   }
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-muted-foreground">Loading bots...</div>
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (!bot) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center">
+          <p className="text-lg text-muted-foreground">Bot not found</p>
+          <Button onClick={() => router.push("/bots")} className="mt-4">
+            Back to Bots
+          </Button>
+        </div>
       </div>
     )
   }
 
   return (
     <div className="p-8">
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center gap-4 mb-8">
+        <Button variant="ghost" size="icon" onClick={() => router.push("/bots")}>
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
         <div>
-          <h1 className="text-3xl font-bold text-slate-900">Your Bots</h1>
-          <p className="text-slate-500 mt-1">You can create up to 20 bots</p>
+          <h1 className="text-3xl font-bold">{bot.name}</h1>
+          <p className="text-muted-foreground">Configure your chatbot</p>
         </div>
-        {bots.length < 20 && (
-          <Button onClick={() => setShowCreateDialog(true)} data-testid="create-bot-button">
-            <Plus className="mr-2 h-4 w-4" />
-            Create Bot
-          </Button>
-        )}
       </div>
 
-      {/* Create Dialog */}
-      {showCreateDialog && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <Card className="w-full max-w-md">
-            <CardHeader>
-              <CardTitle>Create New Bot</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="bot-name">Bot Name</Label>
-                <Input
-                  id="bot-name"
-                  value={newBotName}
-                  onChange={(e) => setNewBotName(e.target.value)}
-                  placeholder="e.g., Support Bot"
-                  autoFocus
-                  data-testid="bot-name-input"
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  onClick={createBot}
-                  disabled={creating || !newBotName.trim()}
-                  className="flex-1"
-                  data-testid="confirm-create-bot"
-                >
-                  {creating ? "Creating..." : "Create"}
-                </Button>
-                <Button
-                  onClick={() => {
-                    setShowCreateDialog(false)
-                    setNewBotName("")
-                  }}
-                  variant="outline"
-                  className="flex-1"
-                >
-                  Cancel
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+      {/* Simple Tab Navigation */}
+      <div className="mb-6 flex gap-2">
+        <Button 
+          variant={activeTab === "settings" ? "default" : "outline"}
+          onClick={() => setActiveTab("settings")}
+        >
+          <Settings className="h-4 w-4 mr-2" />
+          Settings
+        </Button>
+        <Button 
+          variant={activeTab === "knowledge" ? "default" : "outline"}
+          onClick={() => setActiveTab("knowledge")}
+        >
+          <Upload className="h-4 w-4 mr-2" />
+          Knowledge Base
+        </Button>
+        <Button 
+          variant={activeTab === "test" ? "default" : "outline"}
+          onClick={() => setActiveTab("test")}
+        >
+          <MessageSquare className="h-4 w-4 mr-2" />
+          Test Chat
+        </Button>
+      </div>
+
+      {/* Settings Tab */}
+      {activeTab === "settings" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Bot Settings</CardTitle>
+            <CardDescription>Configure how your bot behaves</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Bot Name</Label>
+              <Input
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="My Assistant"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="greeting">Greeting Message</Label>
+              <Input
+                id="greeting"
+                value={greeting}
+                onChange={(e) => setGreeting(e.target.value)}
+                placeholder="Hi! How can I help you today?"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="system">System Prompt</Label>
+              <textarea
+                id="system"
+                value={systemPrompt}
+                onChange={(e) => setSystemPrompt(e.target.value)}
+                placeholder="You are a helpful assistant..."
+                rows={4}
+                className="w-full px-3 py-2 border rounded-md"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="temp">Temperature: {temperature}</Label>
+              <input
+                id="temp"
+                type="range"
+                min="0"
+                max="1"
+                step="0.1"
+                value={temperature}
+                onChange={(e) => setTemperature(parseFloat(e.target.value))}
+                className="w-full"
+              />
+              <p className="text-sm text-muted-foreground">
+                Lower = more focused, Higher = more creative
+              </p>
+            </div>
+
+            <Button onClick={saveSettings} disabled={saving}>
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Save Settings
+            </Button>
+          </CardContent>
+        </Card>
       )}
 
-      {/* Bots Grid */}
-      {bots.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-lg text-slate-600 mb-4">Let's build your first bot</p>
-          <Button onClick={() => setShowCreateDialog(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Create Bot
-          </Button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {bots.map((bot) => (
-            <Card key={bot.id} className="hover:shadow-lg transition-shadow" data-testid={`bot-card-${bot.id}`}>
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <CardTitle className="text-lg">{bot.name}</CardTitle>
-                    <span
-                      className={`inline-block mt-2 px-2 py-1 text-xs rounded-full ${getStatusColor(
-                        bot.status
-                      )}`}
-                    >
-                      {formatStatus(bot.status)}
-                    </span>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2 text-sm text-slate-600 mb-4">
-                  <div>Domains: {bot.domain_count || 0}/10</div>
-                  <div>Sources: {bot.source_count || 0}/2</div>
-                </div>
-                <Button
-                  onClick={() => router.push(`/bots/${bot.id}`)}
-                  className="w-full"
-                  size="sm"
-                  data-testid={`edit-bot-${bot.id}`}
-                >
-                  <Settings className="mr-2 h-4 w-4" />
-                  Edit
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
+      {/* Knowledge Base Tab */}
+      {activeTab === "knowledge" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Knowledge Base</CardTitle>
+            <CardDescription>Upload documents to teach your bot</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="border-2 border-dashed rounded-lg p-8 text-center">
+              <Upload className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+              <p className="text-sm text-muted-foreground mb-4">
+                Upload PDF, TXT, or DOCX files
+              </p>
+              <Input
+                type="file"
+                accept=".pdf,.txt,.docx"
+                onChange={handleFileUpload}
+                disabled={uploading}
+                className="max-w-xs mx-auto"
+              />
+            </div>
 
-          {/* Empty slots */}
-          {bots.length < 20 &&
-            Array.from({ length: Math.min(4, 20 - bots.length) }).map((_, i) => (
-              <Card key={`empty-${i}`} className="border-dashed">
-                <CardContent className="flex flex-col items-center justify-center h-48">
-                  <Plus className="h-12 w-12 text-slate-300 mb-2" />
-                  <p className="text-sm text-slate-500">Empty slot</p>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="mt-2"
-                    onClick={() => setShowCreateDialog(true)}
+            <div className="space-y-2">
+              <h3 className="font-semibold">Uploaded Sources ({sources.length})</h3>
+              {sources.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No sources uploaded yet</p>
+              ) : (
+                sources.map((source) => (
+                  <div
+                    key={source.id}
+                    className="flex items-center justify-between p-3 border rounded-lg"
                   >
-                    Create bot
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-        </div>
+                    <div>
+                      <p className="font-medium">{source.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {source.chunk_count} chunks • {source.status}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Test Chat Tab */}
+      {activeTab === "test" && (
+        <Card className="h-[600px] flex flex-col">
+          <CardHeader>
+            <CardTitle>Test Your Bot</CardTitle>
+            <CardDescription>Chat with your bot to test its responses</CardDescription>
+          </CardHeader>
+          <CardContent className="flex-1 flex flex-col">
+            <div className="flex-1 overflow-y-auto space-y-4 mb-4">
+              {messages.length === 0 ? (
+                <div className="text-center text-muted-foreground py-8">
+                  Start a conversation to test your bot
+                </div>
+              ) : (
+                messages.map((msg, i) => (
+                  <div
+                    key={i}
+                    className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+                  >
+                    <div
+                      className={`max-w-[80%] rounded-lg p-3 ${
+                        msg.role === "user"
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted"
+                      }`}
+                    >
+                      {msg.content}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              <Input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyPress={(e) => e.key === "Enter" && sendMessage()}
+                placeholder="Type your message..."
+                disabled={chatting}
+              />
+              <Button onClick={sendMessage} disabled={chatting || !input.trim()}>
+                {chatting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   )
